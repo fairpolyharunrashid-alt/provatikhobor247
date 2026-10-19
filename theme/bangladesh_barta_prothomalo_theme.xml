@@ -810,6 +810,25 @@
     </div>
   </div>
 
+  <!-- ADSTERRA TOP LEADERBOARD BANNER (728x90) -->
+  <div class='container' style='margin: 15px auto 10px; text-align: center; overflow-x: auto;'>
+    <div style='font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;'>বিজ্ঞাপন</div>
+    <div style='display: inline-block; min-height: 90px;'>
+      <script type='text/javascript'>
+        //<![CDATA[
+        atOptions = {
+          'key' : '62699083668fd3e72be5ded4c88bc343',
+          'format' : 'iframe',
+          'height' : 90,
+          'width' : 728,
+          'params' : {}
+        };
+        //]]>
+      </script>
+      <script src='https://bicea.org/22/62699083668fd3e72be5ded4c88bc343' type='text/javascript'></script>
+    </div>
+  </div>
+
   <!-- 5. MAIN BLOG CONTENT (HOMEPAGE & ARCHIVE & ARTICLE) -->
   <main class='container' style='padding-bottom: 40px;'>
 
@@ -910,6 +929,25 @@
                 </div>
                 <div class='article-body-content'>
                   <data:post.body/>
+                </div>
+
+                <!-- ADSTERRA IN-ARTICLE / POST-BOTTOM BANNER (728x90) -->
+                <div class='article-ad-box' style='margin: 25px auto 15px; text-align: center; padding: 15px 0; border-top: 1px dashed var(--pa-border); border-bottom: 1px dashed var(--pa-border); overflow-x: auto;'>
+                  <div style='font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;'>বিজ্ঞাপন</div>
+                  <div style='display: inline-block; min-height: 90px;'>
+                    <script type='text/javascript'>
+                      //<![CDATA[
+                      atOptions = {
+                        'key' : '62699083668fd3e72be5ded4c88bc343',
+                        'format' : 'iframe',
+                        'height' : 90,
+                        'width' : 728,
+                        'params' : {}
+                      };
+                      //]]>
+                    </script>
+                    <script src='https://bicea.org/22/62699083668fd3e72be5ded4c88bc343' type='text/javascript'></script>
+                  </div>
                 </div>
               </article>
             </b:loop>
@@ -1162,5 +1200,8 @@
   })();
   //]]>
   </script>
+
+  <!-- ADSTERRA POPUNDER SCRIPT -->
+  <script data-cfasync='false' src='https://afders.org/1/f2a2efd035a91dfac2007919e2f2fe54'></script>
 </body>
 </html>
