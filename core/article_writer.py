@@ -51,7 +51,7 @@ class ArticleWriter:
     "meta_description": "১৩০-১৬০ অক্ষরের শক্তিশালী এসইও মেটা ডেসক্রিপশন",
     "image_search_keyword": "ছবি অনুসন্ধানের জন্য মূল ব্যক্তি/প্রতিষ্ঠান/বিষয়ের নাম (যেমন: 'ইশরাক হোসেন' বা 'সৌদি আরব আদালত')",
     "photo_caption": "ছবির প্রাসঙ্গিক বিবরণ/ক্যাপশন (যেমন: ইশরাক হোসেনের ফাইল ছবি)",
-    "photo_credit": "ছবির ক্রেডিট (যেমন: ছবি: প্রথম আলো / ফাইল ছবি: রয়টার্স / ছবি: সংগৃহীত)",
+    "photo_credit": "ছবির ক্রেডিট (অবশ্যই লিখবেন: 'ছবি: প্রভাতী খবর ২৪' অথবা 'ফাইল ছবি / সংগৃহীত' অথবা 'রয়টার্স/এএফপি')",
     "key_highlights": [
         "মূল পয়েন্ট ১",
         "মূল পয়েন্ট ২",
@@ -67,4 +67,13 @@ class ArticleWriter:
         )
         if target_sec:
             result["category"] = target_sec
+
+        # Sanitize photo credit to eliminate any competitor mentions
+        credit = result.get("photo_credit", "")
+        for comp in ["প্রথম আলো", "প্রথম আলো অনলাইন", "বিডিনিউজ", "যুগান্তর", "কালের কণ্ঠ", "সময় টিভি"]:
+            credit = credit.replace(comp, "প্রভাতী খবর ২৪")
+        if not credit.strip():
+            credit = "ছবি: প্রভাতী খবর ২৪"
+        result["photo_credit"] = credit
+
         return result

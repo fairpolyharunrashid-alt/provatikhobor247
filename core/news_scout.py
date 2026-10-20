@@ -1,9 +1,10 @@
 """
 Bangladesh News Scout: Scrapes and aggregates trending Bangladesh news from RSS feeds.
-Includes dedicated per-section discovery for hourly category roundups.
+Includes dedicated per-section discovery, rotation, and smart topic deduplication.
 """
 import base64
 import logging
+import random
 import re
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -38,6 +39,38 @@ def decode_google_news_url(url: str) -> str:
             except Exception:
                 pass
     return url
+
+
+def is_topic_duplicate(new_title: str, excluded_titles: List[str]) -> bool:
+    """Checks if new_title covers the same core event as any excluded title based on keyword overlap."""
+    if not excluded_titles or not new_title:
+        return False
+
+    def extract_keywords(text: str) -> set:
+        words = re.findall(r'[\u0980-\u09FF\w]{3,}', text.lower())
+        stop_words = {
+            "জন্য", "করল", "হলে", "নিয়ে", "করে", "থেকে", "সাথে", "হতে", "আছে", "হলো",
+            "কাছে", "পর", "বড়", "এই", "সেই", "নতুন", "আজ", "গতকাল", "জানা", "গেছে",
+            "দিল", "হবে", "হচ্ছে", "কথা", "দল", "ম্যাচ", "খবর", "সংবাদ", "প্রথম", "আলো",
+            "বাংলাদেশ", "জাতীয়"
+        }
+        return {w for w in words if w not in stop_words}
+
+    new_kw = extract_keywords(new_title)
+    if len(new_kw) < 2:
+        return False
+
+    for ex in excluded_titles:
+        ex_kw = extract_keywords(ex)
+        overlap = new_kw & ex_kw
+        # If 2 or more distinct core keywords match (e.g. 'জিম্বাবুয়ে' and '৯৯')
+        if len(overlap) >= 2:
+            return True
+        # If exact substring
+        if len(ex) > 10 and (ex.lower() in new_title.lower() or new_title.lower() in ex.lower()):
+            return True
+
+    return False
 
 
 class NewsScout:
@@ -98,16 +131,23 @@ class NewsScout:
         return items
 
     def get_fresh_story_for_section(self, section_name: str, excluded_titles: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-        """Returns the top fresh, unprocessed news item specifically for the given section."""
-        excluded = [t.lower() for t in (excluded_titles or [])]
+        """Returns the top fresh, unprocessed news item specifically for the given section.
+        Enforces strict topic deduplication and feed diversity.
+        """
+        excluded = excluded_titles or []
         feed_config = SECTION_FEEDS.get(section_name)
-        urls = feed_config if isinstance(feed_config, list) else ([feed_config] if feed_config else [])
+        urls = list(feed_config) if isinstance(feed_config, list) else ([feed_config] if feed_config else [])
+
+        # Shuffle/rotate feed sources so sports doesn't just hit the same match over and over
+        if len(urls) > 1:
+            random.shuffle(urls)
+
         for url in urls:
             items = self.fetch_feed(url)
             for it in items:
                 title_clean = it["title"].strip()
                 if not is_news_scraped(title_clean):
-                    if not any(ex in title_clean.lower() or title_clean.lower() in ex for ex in excluded if len(ex) > 10):
+                    if not is_topic_duplicate(title_clean, excluded):
                         it["link"] = decode_google_news_url(it["link"])
                         it["target_section"] = section_name
                         return it
@@ -118,7 +158,7 @@ class NewsScout:
             for it in items:
                 title_clean = it["title"].strip()
                 if not is_news_scraped(title_clean):
-                    if not any(ex in title_clean.lower() or title_clean.lower() in ex for ex in excluded if len(ex) > 10):
+                    if not is_topic_duplicate(title_clean, excluded):
                         it["link"] = decode_google_news_url(it["link"])
                         it["target_section"] = section_name
                         return it
