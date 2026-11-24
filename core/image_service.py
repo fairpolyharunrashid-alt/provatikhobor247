@@ -65,6 +65,11 @@ EDITORIAL_FALLBACK_POOLS = {
     "শিক্ষা": [
         "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Curzon_Hall%2C_University_of_Dhaka_01.jpg/1200px-Curzon_Hall%2C_University_of_Dhaka_01.jpg",
     ],
+    "জীবনযাপন": [
+        "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&h=675&q=85",
+        "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1200&h=675&q=85",
+        "https://images.unsplash.com/photo-1447452001602-7090c7ab2db3?auto=format&fit=crop&w=1200&h=675&q=85"
+    ],
     "মতামত": [
         "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&h=675&q=85"
     ]
