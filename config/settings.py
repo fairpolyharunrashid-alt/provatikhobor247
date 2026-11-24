@@ -34,7 +34,7 @@ else:
         "AQ.Ab8RN6JTV2Hg6WaaTbmME66gbOoOQFUbSAttecVYC4DMhFv-BA"
     ]
 
-GEMINI_MODEL = "gemini-flash-latest"
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 # Editorial News Sections (খেলাধুলা prioritized with high frequency)
 SECTIONS = [

@@ -14,18 +14,17 @@ from config.settings import GEMINI_API_KEYS, GEMINI_MODEL
 logger = logging.getLogger(__name__)
 
 FALLBACK_MODELS: List[str] = [
-    "gemini-flash-latest",
-    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-3.5-flash",
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
 ]
 
 
 class LLMPool:
     """Manages a pool of Gemini API keys with automatic failover and rotation."""
 
-    def __init__(self, api_keys: Optional[List[str]] = None, default_model: str = "gemini-flash-latest"):
+    def __init__(self, api_keys: Optional[List[str]] = None, default_model: str = "gemini-3.5-flash-lite"):
         self.api_keys = [k.strip() for k in (api_keys or GEMINI_API_KEYS) if k and k.strip()]
         self.default_model = default_model
         self._key_index = 0
