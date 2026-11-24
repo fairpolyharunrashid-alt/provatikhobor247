@@ -2,13 +2,16 @@ name: Provati Khobor 24 - 24/7 Cloud News Publisher
 
 on:
   schedule:
-    # Runs every hour at minute 0 (24 times/day)
+    # Runs every hour at minute 0 (24 times/day, 100% free within GitHub quota)
     - cron: '0 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI anytime
 
 concurrency:
   group: news-publishing
   cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   publish-news:
@@ -19,6 +22,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -38,3 +43,10 @@ jobs:
           BLOG_ID: ${{ secrets.BLOG_ID }}
         run: |
           python main.py --cloud-cycle
+
+      - name: Keep-Alive & Sync Registry (Prevents GitHub 60-day Inactivity Pause)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/used_images.json || true
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: Sync used images registry [skip ci]" && git push)

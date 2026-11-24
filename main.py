@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 if sys.platform == "win32":
     try:
@@ -31,6 +32,7 @@ from core.image_service import ImageService
 from core.llm_pool import LLMPool
 from core.news_scout import NewsScout
 from core.publisher import BloggerPublisher
+from core.editorial_agent import EditorialAgent
 
 # Logging setup
 logging.basicConfig(
@@ -53,6 +55,10 @@ class BDNewsEngine:
         self.writer = ArticleWriter(self.llm_pool)
         self.image_service = ImageService()
         self.publisher = BloggerPublisher(blog_id=BLOG_ID)
+        self.editorial_agent = EditorialAgent(publisher=self.publisher, llm_pool=self.llm_pool)
+
+    def publish_daily_editorial(self) -> Optional[str]:
+        return self.editorial_agent.publish_daily_editorial()
 
     def process_section_story(self, section_name: str, excluded_titles: list = None) -> bool:
         """Finds, writes, and publishes 1 authentic news article specifically for a section."""
@@ -139,6 +145,16 @@ class BDNewsEngine:
             published += 1
 
         print(f"\n[✓] Cloud Cycle complete. Published {published}/{posts_per_cycle} posts.", flush=True)
+
+        # Evening Editorial (15:00 UTC = 21:00 / 9 PM Bangladesh Time)
+        if datetime.utcnow().hour == 15:
+            print("\n[*] Evening Flagship Editorial Hour -> Crafting Op-Ed (মতামত)...", flush=True)
+            try:
+                self.editorial_agent.publish_daily_editorial()
+                published += 1
+            except Exception as e:
+                logger.error(f"Error publishing daily editorial in cloud cycle: {e}")
+
         return published
 
     def run_hourly_multi_section_cycle(self):
@@ -171,6 +187,10 @@ class BDNewsEngine:
         while True:
             try:
                 self.run_hourly_multi_section_cycle()
+                # Evening Editorial Check (between 21:00 and 22:00 local time)
+                if datetime.now().hour == 21:
+                    print("\n[*] Evening Hour (21:00) -> Publishing Daily Editorial Opinion...", flush=True)
+                    self.editorial_agent.publish_daily_editorial()
             except Exception as e:
                 logger.error(f"Error during hourly cycle: {e}")
 
@@ -181,6 +201,7 @@ class BDNewsEngine:
 def main():
     parser = argparse.ArgumentParser(description="Autonomous Bangladesh News Engine")
     parser.add_argument("--single-section", type=str, default="", help="Publish 1 story for a specific section")
+    parser.add_argument("--daily-editorial", action="store_true", help="Synthesize all stories today and publish flagship Editorial Op-Ed (মতামত)")
     parser.add_argument("--cloud-cycle", action="store_true", help="Run 1 Cloud Cycle (2 posts: 1 Sports + 1 Rotating section)")
     parser.add_argument("--run-cycle", action="store_true", help="Run 1 full multi-section cycle right now")
     parser.add_argument("--schedule", action="store_true", help="Run 24/7 continuous hourly scheduler")
@@ -191,6 +212,8 @@ def main():
 
     if args.single_section:
         engine.process_section_story(args.single_section)
+    elif args.daily_editorial:
+        engine.publish_daily_editorial()
     elif args.cloud_cycle:
         engine.run_cloud_cycle()
     elif args.run_cycle:

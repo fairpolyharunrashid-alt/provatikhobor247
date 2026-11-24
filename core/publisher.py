@@ -152,6 +152,8 @@ class BloggerPublisher:
             labels.extend(["প্রযুক্তি", "বিজ্ঞান ও প্রযুক্তি"])
         if category in ["অর্থনীতি", "বাণিজ্য", "অর্থনীতি ও বাণিজ্য"]:
             labels.extend(["অর্থনীতি", "বাণিজ্য", "অর্থনীতি ও বাণিজ্য"])
+        if category in ["মতামত", "সম্পাদকীয়"]:
+            labels.extend(["মতামত", "সম্পাদকীয়", "কলাম", "বিশ্লেষণ"])
         labels = list(dict.fromkeys(labels))
 
         body = {

@@ -4,7 +4,9 @@ Dedicated login configured for: fairpolyharunrashid@gmail.com
 Target Blog ID: 2941397978971258684
 """
 import json
+import os
 import sys
+import wsgiref.simple_server
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -14,7 +16,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import InstalledAppFlow, _RedirectWSGIApp, _WSGIRequestHandler, _ExclusiveWSGIServer
 from googleapiclient.discovery import build
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,26 +40,58 @@ def main():
         print(f"[Error] Client secrets file not found: {CLIENT_SECRETS_FILE}", flush=True)
         return
 
-    print(f"\n[*] {TARGET_EMAIL} অ্যাকাউন্টের জন্য গুগল সাইন-ইন প্রস্তুত করা হচ্ছে...", flush=True)
+    port = 8088
+    print(f"\n[*] Starting local redirect server on port {port}...", flush=True)
+
+    flow = InstalledAppFlow.from_client_secrets_file(
+        str(CLIENT_SECRETS_FILE),
+        scopes=SCOPES
+    )
+
+    wsgi_app = _RedirectWSGIApp("Authorization Successful! You may now close this browser tab.")
+    local_server = wsgiref.simple_server.make_server(
+        "localhost",
+        port,
+        wsgi_app,
+        server_class=_ExclusiveWSGIServer,
+        handler_class=_WSGIRequestHandler,
+    )
 
     try:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            str(CLIENT_SECRETS_FILE),
-            scopes=SCOPES
-        )
-
-        creds = flow.run_local_server(
-            port=0,
+        flow.redirect_uri = f"http://localhost:{port}/"
+        auth_url, _ = flow.authorization_url(
             prompt="consent",
             login_hint=TARGET_EMAIL,
-            authorization_prompt_message="[AUTH_URL_START]\n{url}\n[AUTH_URL_END]\n\nব্রাউজারে লিঙ্কটি ওপেন না হলে উপরের লিংকে ক্লিক করুন।\n",
-            success_message="Authorization Successful! You may now close this window."
+            access_type="offline"
         )
 
-        TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
+        # Write to desktop link file
+        desktop_link = Path("C:/Users/Harun/Desktop/GOOGLE_LOGIN_LINK.txt")
+        desktop_link.write_text(f"{auth_url}\n", encoding="utf-8")
+
+        # Open in browser on desktop
+        try:
+            os.startfile(auth_url)
+            print("[✓] Default browser launched with Google Authorization link!", flush=True)
+        except Exception as e:
+            print(f"[!] Could not launch browser automatically: {e}", flush=True)
+
+        print("\n" + "=" * 75, flush=True)
+        print("AUTH_URL_START", flush=True)
+        print(auth_url, flush=True)
+        print("AUTH_URL_END", flush=True)
+        print("=" * 75 + "\n", flush=True)
+        print("[*] Waiting for user authorization in browser...", flush=True)
+
+        local_server.handle_request()
+
+        authorization_response = wsgi_app.last_request_uri.replace("http:", "https:")
+        flow.fetch_token(authorization_response=authorization_response)
+
+        TOKEN_FILE.write_text(flow.credentials.to_json(), encoding="utf-8")
         print(f"\n[SUCCESS] নতুন টোকেন সফলভাবে সেভ হয়েছে: {TOKEN_FILE.name}", flush=True)
 
-        service = build("blogger", "v3", credentials=creds)
+        service = build("blogger", "v3", credentials=flow.credentials)
         user = service.users().get(userId="self").execute()
         print(f"[✓] লগইন কৃত অ্যাকাউন্ট: {user.get('displayName')} ({user.get('id')})", flush=True)
 
@@ -77,6 +111,8 @@ def main():
 
     except Exception as e:
         print(f"\n[Error] Authorization failed: {e}", flush=True)
+    finally:
+        local_server.server_close()
 
 
 if __name__ == "__main__":

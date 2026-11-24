@@ -753,7 +753,24 @@
   <div class='top-utility-bar'>
     <div class='container top-utility-inner'>
       <div class='top-date-meta'>
-        <span id='live-bangla-date'>📅 রবিবার, ১৮ অক্টোবর ২০২৬</span>
+        <span id='live-bangla-date'>📅 লাইভ আপডেট</span>
+        <script type='text/javascript'>
+          //<![CDATA[
+          (function() {
+            try {
+              var days = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+              var months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+              var toBn = function(n) {
+                return String(n).replace(/[0-9]/g, function(d) { return '০১২৩৪৫৬৭৮৯'[d]; });
+              };
+              var now = new Date();
+              var str = '📅 ' + days[now.getDay()] + ', ' + toBn(now.getDate()) + ' ' + months[now.getMonth()] + ' ' + toBn(now.getFullYear());
+              var el = document.getElementById('live-bangla-date');
+              if (el) el.textContent = str;
+            } catch(e) {}
+          })();
+          //]]>
+        </script>
         <span>•</span>
         <span>ঢাকা ২৩° সে.</span>
       </div>
