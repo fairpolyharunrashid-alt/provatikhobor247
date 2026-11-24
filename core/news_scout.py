@@ -104,7 +104,16 @@ class NewsScout:
                     link = link_elem.text.strip() if link_elem is not None and link_elem.text else ""
                     raw_desc = desc_elem.text.strip() if desc_elem is not None and desc_elem.text else ""
 
-                    clean_desc = BeautifulSoup(raw_desc, "html.parser").get_text() if raw_desc else ""
+                    clean_desc = ""
+                    if raw_desc:
+                        d_soup = BeautifulSoup(raw_desc, "html.parser")
+                        # Google News groups multiple different stories in <ol><li>.
+                        # We must isolate ONLY the first <li> that strictly belongs to this item's title.
+                        first_li = d_soup.find("li")
+                        if first_li:
+                            clean_desc = first_li.get_text().strip()
+                        else:
+                            clean_desc = d_soup.get_text().strip()
                     pub_date = pub_elem.text.strip() if pub_elem is not None and pub_elem.text else ""
 
                     feed_image = ""

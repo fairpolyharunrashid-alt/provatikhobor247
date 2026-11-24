@@ -95,6 +95,16 @@ class BDNewsEngine:
         # 3. Source authentic 16:9 featured image with credit
         category = article.get("category", section_name)
         headline = article.get("headline", raw_title)
+
+        # Topic alignment sanity check: ensure generated article hasn't drifted from source story
+        import re
+        raw_words = set(re.findall(r'[\u0980-\u09FF\w]{3,}', raw_title.lower()))
+        head_words = set(re.findall(r'[\u0980-\u09FF\w]{3,}', headline.lower()))
+        if len(raw_words & head_words) == 0 and len(raw_words) >= 2:
+            logger.warning(f"Topic drift detected between raw '{raw_title}' and '{headline}'. Aligning headline to raw title.")
+            headline = raw_title
+            article["headline"] = raw_title
+
         image_info = self.image_service.get_authentic_news_image(
             news_item=news_item,
             article_data=article
