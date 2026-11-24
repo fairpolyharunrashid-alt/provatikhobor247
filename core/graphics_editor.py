@@ -104,13 +104,13 @@ class GraphicsEditorAgent:
             logger.debug(f"Failed to download image from {url}: {e}")
         return None
 
-    def process_and_crop_16_9(self, img: Image.Image, crop_watermark_bottom: bool = True) -> Image.Image:
-        """Crops bottom watermark zone if present, then center-crops to precise 16:9 ratio."""
+    def process_and_crop_16_9(self, img: Image.Image, crop_watermark_bottom: bool = False) -> Image.Image:
+        """Standardizes news photo to professional 16:9 ratio (1200x675) with LANCZOS resampling."""
         w, h = img.size
 
-        # If image likely has a competitor footer watermark, crop the bottom 10%
+        # Only crop bottom if explicitly requested (e.g. forced bottom banner)
         if crop_watermark_bottom and h > 400:
-            crop_bottom = int(h * 0.90)  # Remove bottom 10%
+            crop_bottom = int(h * 0.92)  # Remove bottom banner if present
             img = img.crop((0, 0, w, crop_bottom))
             w, h = img.size
 
@@ -124,7 +124,7 @@ class GraphicsEditorAgent:
             left = (w - new_w) // 2
             img = img.crop((left, 0, left + new_w, h))
         else:
-            # Image is taller than 16:9 -> crop top/bottom (center crop)
+            # Image is taller than 16:9 -> center crop top/bottom
             new_h = int(w / target_ratio)
             top = (h - new_h) // 2
             img = img.crop((0, top, w, top + new_h))
@@ -134,9 +134,9 @@ class GraphicsEditorAgent:
 
         # Subtle professional news enhancement: sharpen and enhance contrast
         enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(1.05)
+        img = enhancer.enhance(1.04)
         enhancer_sharp = ImageEnhance.Sharpness(img)
-        img = enhancer_sharp.enhance(1.15)
+        img = enhancer_sharp.enhance(1.10)
 
         return img
 
@@ -173,7 +173,7 @@ class GraphicsEditorAgent:
         self,
         candidate_url: str,
         headline: str = "",
-        allow_crop_watermark: bool = True
+        allow_crop_watermark: bool = False
     ) -> Optional[str]:
         """Full pipeline: cleans URL, downloads, removes watermarks, crops 16:9, uploads to CDN."""
         if not candidate_url:

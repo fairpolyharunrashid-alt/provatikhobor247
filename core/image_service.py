@@ -98,7 +98,7 @@ class ImageService:
         self.editor = GraphicsEditorAgent()
 
     def scrape_article_og_image(self, article_url: str) -> Optional[str]:
-        """Scrapes the original og:image from the source news page."""
+        """Scrapes the authentic original news image from the source news page (OpenGraph, Twitter, Schema JSON-LD)."""
         if not article_url:
             return None
         if "news.google.com" in article_url:
@@ -113,15 +113,62 @@ class ImageService:
             resp = requests.get(article_url, headers=self.headers, timeout=8)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
-                og = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"})
-                if og and og.get("content"):
-                    candidate = og["content"].strip()
-                    if candidate.startswith("//"):
-                        candidate = "https:" + candidate
-                    elif candidate.startswith("/"):
-                        candidate = urllib.parse.urljoin(article_url, candidate)
-                    if is_valid_news_image(candidate) and not is_image_used(candidate):
-                        return candidate
+                
+                # 1. OpenGraph / Twitter meta tags
+                meta_props = [
+                    ("property", "og:image"),
+                    ("property", "og:image:secure_url"),
+                    ("property", "og:image:url"),
+                    ("name", "twitter:image"),
+                    ("name", "twitter:image:src"),
+                    ("itemprop", "image")
+                ]
+                for attr, val in meta_props:
+                    tag = soup.find("meta", attrs={attr: val})
+                    if tag and tag.get("content"):
+                        cand = tag["content"].strip()
+                        if cand.startswith("//"):
+                            cand = "https:" + cand
+                        elif cand.startswith("/"):
+                            cand = urllib.parse.urljoin(article_url, cand)
+                        if is_valid_news_image(cand):
+                            return self.editor.clean_source_url(cand)
+
+                # 2. Schema.org JSON-LD structured data
+                for s in soup.find_all("script", type="application/ld+json"):
+                    try:
+                        import json
+                        data = json.loads(s.string or "{}")
+                        items = data if isinstance(data, list) else data.get("@graph", [data])
+                        for item in items:
+                            img = item.get("image")
+                            if isinstance(img, str) and is_valid_news_image(img):
+                                return self.editor.clean_source_url(img)
+                            elif isinstance(img, dict) and img.get("url") and is_valid_news_image(img["url"]):
+                                return self.editor.clean_source_url(img["url"])
+                            elif isinstance(img, list) and len(img) > 0:
+                                first = img[0]
+                                if isinstance(first, str) and is_valid_news_image(first):
+                                    return self.editor.clean_source_url(first)
+                                elif isinstance(first, dict) and first.get("url") and is_valid_news_image(first["url"]):
+                                    return self.editor.clean_source_url(first["url"])
+                    except Exception:
+                        continue
+
+                # 3. Main article lead image element
+                for selector in ["figure img", "article img", ".featured-image img", ".lead-img img", ".detail-image img"]:
+                    img_tag = soup.select_one(selector)
+                    if img_tag:
+                        src = img_tag.get("src") or img_tag.get("data-src") or img_tag.get("data-original")
+                        if src:
+                            src = src.strip()
+                            if src.startswith("//"):
+                                src = "https:" + src
+                            elif src.startswith("/"):
+                                src = urllib.parse.urljoin(article_url, src)
+                            if is_valid_news_image(src):
+                                return self.editor.clean_source_url(src)
+
         except Exception as e:
             logger.debug(f"Source article og:image scrape error for {article_url}: {e}")
         return None
@@ -186,59 +233,57 @@ class ImageService:
         news_item: Dict[str, Any],
         article_data: Dict[str, Any]
     ) -> Dict[str, str]:
-        """Provides an authentic, 100% unique 16:9 news photo with proper caption and credit.
-        Cleans any competitor watermark/overlay using GraphicsEditorAgent.
+        """Provides the authentic, original news photo from the reporting source with proper credit.
+        - Priority 1: Real original image from the source news page / feed.
+        - Gives prominent credit: e.g. 'ছবি: প্রথম আলো' or 'ছবি: দ্য ডেইলি স্টার বাংলা'.
+        - Standardizes to crisp 16:9 HD editorial aspect ratio via GraphicsEditorAgent.
         """
         title = article_data.get("headline") or news_item.get("title", "")
         category = article_data.get("category", "জাতীয়")
         search_keyword = article_data.get("image_search_keyword", "")
         photo_caption = article_data.get("photo_caption") or f"{title}"
-        photo_credit = "ছবি: প্রভাতী খবর ২৪"
+
+        # Clean source name for attribution
+        source_name = news_item.get("source") or "বাংলাদেশ সংবাদ"
+        source_name = source_name.replace(" - ", "").strip()
+        photo_credit = f"ছবি: {source_name}"
 
         candidate_url = None
 
-        # 1. Search for specific named entity / topic in Wikimedia (best authentic & free source)
-        queries = []
-        if search_keyword:
-            queries.append(search_keyword)
-        # Extract main subject
-        clean_headline = title.split(":")[0].replace("হলো", "").replace("হবে", "").strip()
-        queries.append(clean_headline)
+        # 1. PRIORITY 1: Direct feed media / enclosure image from source
+        feed_img = news_item.get("feed_image")
+        if feed_img and is_valid_news_image(feed_img):
+            candidate_url = self.editor.clean_source_url(feed_img)
+            photo_credit = f"ছবি: {source_name}"
 
-        for q in queries:
-            wiki_img = self.search_wikimedia_image(q)
-            if wiki_img:
-                candidate_url = wiki_img
-                photo_credit = "ফাইল ছবি / সংগৃহীত"
-                break
-            commons_img = self.search_commons_image(q)
-            if commons_img:
-                candidate_url = commons_img
-                photo_credit = "ফাইল ছবি: উইকিমিডিয়া"
-                break
-
-        # 2. Check feed media image if not already used
-        if not candidate_url:
-            feed_img = news_item.get("feed_image")
-            if feed_img and is_valid_news_image(feed_img) and not is_image_used(feed_img):
-                candidate_url = feed_img
-
-        # 3. Scrape original news article page (if decoded)
+        # 2. PRIORITY 2: Scrape authentic og:image directly from source news article
         if not candidate_url and news_item.get("link"):
             scraped = self.scrape_article_og_image(news_item["link"])
-            if scraped and not is_image_used(scraped):
+            if scraped and is_valid_news_image(scraped):
                 candidate_url = scraped
+                photo_credit = f"ছবি: {source_name}"
 
-        # 4. Search Bing Images for the query
+        # 3. PRIORITY 3: Search Wikimedia for specific person/entity (contextual backup)
         if not candidate_url:
+            queries = []
+            if search_keyword:
+                queries.append(search_keyword)
+            clean_headline = title.split(":")[0].replace("হলো", "").replace("হবে", "").strip()
+            queries.append(clean_headline)
+
             for q in queries:
-                searched = self.search_bing_news_image(q)
-                if searched:
-                    candidate_url = searched
+                wiki_img = self.search_wikimedia_image(q)
+                if wiki_img:
+                    candidate_url = wiki_img
                     photo_credit = "ফাইল ছবি / সংগৃহীত"
                     break
+                commons_img = self.search_commons_image(q)
+                if commons_img:
+                    candidate_url = commons_img
+                    photo_credit = "ফাইল ছবি: উইকিমিডিয়া"
+                    break
 
-        # 5. Fallback pool (pick an unused photo from pool)
+        # 4. PRIORITY 4: Curated editorial fallback pool
         if not candidate_url:
             pool = EDITORIAL_FALLBACK_POOLS.get(category, EDITORIAL_FALLBACK_POOLS["জাতীয়"])
             unused = [p for p in pool if not is_image_used(p)]
@@ -249,10 +294,10 @@ class ImageService:
             photo_credit = "প্রতীকী ছবি: প্রভাতী খবর ২৪"
 
         # Pass through GraphicsEditorAgent:
-        # - Strips competitor overlays/banners
-        # - Crops to 16:9
-        # - Enhances sharpness
-        # - Uploads to CDN
+        # - Strips competitor overlay query parameters
+        # - Center-crops to 16:9 (1200x675)
+        # - Enhances clarity & sharpness
+        # - Uploads to high-speed permanent CDN
         final_image_url = self.editor.create_copyright_free_editorial_image(
             candidate_url=candidate_url,
             headline=title
@@ -260,6 +305,14 @@ class ImageService:
 
         if not final_image_url:
             final_image_url = candidate_url
+
+        mark_image_as_used(final_image_url)
+
+        return {
+            "image_url": final_image_url,
+            "caption": photo_caption,
+            "credit": photo_credit
+        }
 
         mark_image_as_used(final_image_url)
 

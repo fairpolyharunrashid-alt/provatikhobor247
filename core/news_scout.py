@@ -78,16 +78,20 @@ class NewsScout:
 
     def __init__(self):
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7",
+            "Accept-Language": "en-US,en;q=0.9,bn;q=0.8",
         }
 
     def fetch_feed(self, url: str) -> List[Dict[str, Any]]:
         items = []
         try:
-            req = urllib.request.Request(url, headers=self.headers)
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                xml_data = resp.read()
-            root = ET.fromstring(xml_data)
+            import requests
+            resp = requests.get(url, headers=self.headers, timeout=12)
+            if resp.status_code != 200:
+                logger.warning(f"Feed fetch returned status {resp.status_code} for {url}")
+                return []
+            root = ET.fromstring(resp.content)
 
             for item in root.findall(".//item"):
                 title_elem = item.find("title")
@@ -112,8 +116,24 @@ class NewsScout:
                                 feed_image = candidate
                                 break
 
+                    # Also check for embedded <img> in description
+                    if not feed_image and raw_desc:
+                        try:
+                            d_soup = BeautifulSoup(raw_desc, "html.parser")
+                            img_t = d_soup.find("img")
+                            if img_t and img_t.get("src"):
+                                c = img_t["src"].strip()
+                                if not any(bad in c.lower() for bad in ["google", "logo", "icon", "1x1"]):
+                                    feed_image = c
+                        except Exception:
+                            pass
+
+                    # Extract authentic publisher/source name
                     source = "বাংলাদেশ সংবাদ"
-                    if " - " in title:
+                    src_elem = item.find("source")
+                    if src_elem is not None and src_elem.text:
+                        source = src_elem.text.strip()
+                    elif " - " in title:
                         parts = title.rsplit(" - ", 1)
                         title = parts[0].strip()
                         source = parts[1].strip()
@@ -132,8 +152,11 @@ class NewsScout:
 
     def get_fresh_story_for_section(self, section_name: str, excluded_titles: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """Returns the top fresh, unprocessed news item specifically for the given section.
-        Enforces strict topic deduplication and feed diversity.
+        Enforces strict topic deduplication, authentic source image verification, and feed diversity.
         """
+        from core.image_service import ImageService
+        img_svc = ImageService()
+
         excluded = excluded_titles or []
         feed_config = SECTION_FEEDS.get(section_name)
         urls = list(feed_config) if isinstance(feed_config, list) else ([feed_config] if feed_config else [])
@@ -142,25 +165,30 @@ class NewsScout:
         if len(urls) > 1:
             random.shuffle(urls)
 
-        for url in urls:
+        all_urls = urls + [u for u in GENERAL_FEEDS if u not in urls]
+        fallback_item = None
+
+        for url in all_urls:
             items = self.fetch_feed(url)
             for it in items:
                 title_clean = it["title"].strip()
-                if not is_news_scraped(title_clean):
-                    if not is_topic_duplicate(title_clean, excluded):
-                        it["link"] = decode_google_news_url(it["link"])
-                        it["target_section"] = section_name
+                if not is_news_scraped(title_clean) and not is_topic_duplicate(title_clean, excluded):
+                    decoded_link = decode_google_news_url(it["link"])
+                    it["link"] = decoded_link
+                    it["target_section"] = section_name
+
+                    # 1. Check if feed already has authentic image from source
+                    if it.get("feed_image"):
                         return it
 
-        # Fallback to general feeds if specific feed has no fresh items
-        for gen_url in GENERAL_FEEDS:
-            items = self.fetch_feed(gen_url)
-            for it in items:
-                title_clean = it["title"].strip()
-                if not is_news_scraped(title_clean):
-                    if not is_topic_duplicate(title_clean, excluded):
-                        it["link"] = decode_google_news_url(it["link"])
-                        it["target_section"] = section_name
+                    # 2. Check if source article page has authentic og:image
+                    scraped_img = img_svc.scrape_article_og_image(decoded_link)
+                    if scraped_img:
+                        it["feed_image"] = scraped_img
                         return it
 
-        return None
+                    # Save as fallback only if no item with original image is found
+                    if not fallback_item:
+                        fallback_item = it
+
+        return fallback_item
