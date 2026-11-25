@@ -33,6 +33,7 @@ from core.llm_pool import LLMPool
 from core.news_scout import NewsScout
 from core.publisher import BloggerPublisher
 from core.editorial_agent import EditorialAgent
+from core.chief_editor import ChiefEditorAgent
 
 # Logging setup
 logging.basicConfig(
@@ -55,6 +56,8 @@ class BDNewsEngine:
         self.writer = ArticleWriter(self.llm_pool)
         self.image_service = ImageService()
         self.publisher = BloggerPublisher(blog_id=BLOG_ID)
+        self.chief_editor = ChiefEditorAgent(self.llm_pool)
+        self.chief_editor.sync_published_images_from_blogger(self.publisher)
         self.editorial_agent = EditorialAgent(publisher=self.publisher, llm_pool=self.llm_pool)
 
     def publish_daily_editorial(self) -> Optional[str]:
@@ -105,22 +108,55 @@ class BDNewsEngine:
             headline = raw_title
             article["headline"] = raw_title
 
-        image_info = self.image_service.get_authentic_news_image(
-            news_item=news_item,
-            article_data=article
-        )
+        # 3. Source authentic 16:9 featured image with STRICT Chief Editor Approval Gate & Feedback Loop
+        max_image_attempts = 3
+        current_query = None
+        approved_image_info = None
 
-        # 4. Publish to Blogger
+        for attempt in range(1, max_image_attempts + 1):
+            candidate_image_info = self.image_service.get_authentic_news_image(
+                news_item=news_item,
+                article_data=article,
+                override_query=current_query
+            )
+
+            # Strict Chief Editor Review Gate
+            review = self.chief_editor.evaluate_article_and_image(
+                headline=headline,
+                category=category,
+                summary=news_item.get("summary", ""),
+                image_info=candidate_image_info
+            )
+
+            if review["approved"]:
+                approved_image_info = candidate_image_info
+                logger.info(f"[Chief Editor APPROVED] Image passed quality & zero-duplicate check: {approved_image_info['image_url'][:60]}")
+                break
+            else:
+                logger.warning(
+                    f"[Chief Editor REJECTED (Attempt {attempt}/{max_image_attempts})] "
+                    f"Type: {review['rejection_type']} | Reason: {review['rejection_reason']} "
+                    f"-> Bouncing back to Graphics Agent with query: '{review['suggested_query']}'"
+                )
+                current_query = review.get("suggested_query")
+
+        if not approved_image_info or not approved_image_info.get("image_url"):
+            logger.error(f"[Chief Editor VETO] Publishing aborted for '{headline}'. No unique, relevant image approved after {max_image_attempts} attempts.")
+            return False
+
+        # 4. Publish to Blogger only after Chief Editor's formal approval
         logger.info(f"Publishing to Blogger ({BLOG_NAME} - Blog ID: {BLOG_ID})...")
         try:
             res = self.publisher.publish_news(
                 article=article,
-                image_info=image_info,
+                image_info=approved_image_info,
                 source_title=raw_title
             )
+            # Register in Chief Editor's live published cache
+            self.chief_editor.register_published_image(approved_image_info["image_url"])
             print(f"\n[✓] সফলভাবে প্রকাশিত হয়েছে [{category}]: {headline}")
             print(f"    URL: {res.get('url')}")
-            print(f"    ছবি: {image_info.get('credit')}\n", flush=True)
+            print(f"    ছবি: {approved_image_info.get('credit')}\n", flush=True)
             return True
         except Exception as e:
             logger.error(f"Failed to publish to Blogger: {e}")

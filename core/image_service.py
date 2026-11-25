@@ -226,34 +226,68 @@ class ImageService:
         return None
 
     def search_bing_news_image(self, query: str) -> Optional[str]:
-        """Searches Bing Images for authentic photographic coverage."""
+        """Searches Bing Images for authentic editorial photographic coverage."""
         if not query:
             return None
-        try:
-            url = f"https://www.bing.com/images/search?q={urllib.parse.quote_plus(query)}&first=1"
-            r = requests.get(url, headers=self.headers, timeout=6)
-            if r.status_code == 200:
-                murls = re.findall(r'murl&quot;:&quot;(https?://[^&]+)&quot;', r.text)
-                for m in murls:
-                    if is_valid_news_image(m) and not is_image_used(m) and any(ext in m.lower() for ext in [".jpg", ".jpeg", ".png", ".webp"]):
-                        return m
-        except Exception as e:
-            logger.debug(f"Bing image search error for '{query}': {e}")
+        queries = [query]
+        # Common Bengali to English entity mapping for high-accuracy search
+        entity_map = {
+            "সোহেল খান": "Sohel Khan actor",
+            "সালমান খান": "Salman Khan",
+            "পরীমনি": "Pori Moni",
+            "পরী মণি": "Pori Moni",
+            "শাকিব খান": "Shakib Khan",
+            "মেহজাবীন": "Mehazabien Chowdhury",
+            "মিমি চক্রবর্তী": "Mimi Chakraborty",
+            "শুভশ্রী": "Subhashree Ganguly",
+            "তাহসান": "Tahsan Rahman Khan",
+            "ইমরান মাহমুদুল": "Imran Mahmudul",
+            "মিস ইউনিভার্স": "Miss Universe",
+            "শেখ হাসিনা": "Sheikh Hasina",
+            "খালেদা জিয়া": "Khaleda Zia",
+            "তারেক রহমান": "Tarek Rahman",
+            "মির্জা ফখরুল": "Mirza Fakhrul",
+            "সাকিব আল হাসান": "Shakib Al Hasan",
+            "নাজমুল হোসেন শান্ত": "Najmul Hossain Shanto",
+            "মুশফিকুর রহিম": "Mushfiqur Rahim",
+            "তাসকিন আহমেদ": "Taskin Ahmed",
+            "মেহেদী হাসান মিরাজ": "Mehidy Hasan Miraz",
+        }
+        for bn_name, en_name in entity_map.items():
+            if bn_name in query:
+                queries.append(en_name)
+                break
+
+        for q in queries:
+            try:
+                url = f"https://www.bing.com/images/search?q={urllib.parse.quote_plus(q)}&first=1"
+                r = requests.get(url, headers=self.headers, timeout=8)
+                if r.status_code == 200:
+                    murls = re.findall(r'&quot;murl&quot;:&quot;(https?://[^&]+)&quot;', r.text)
+                    if not murls:
+                        murls = re.findall(r'"murl":"(https?://[^"]+)"', r.text)
+                    for m in murls:
+                        clean_m = self.editor.clean_source_url(m)
+                        if is_valid_news_image(clean_m) and not is_image_used(clean_m):
+                            if any(ext in clean_m.lower() for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                                return clean_m
+            except Exception as e:
+                logger.debug(f"Bing image search error for '{q}': {e}")
         return None
 
     def get_authentic_news_image(
         self,
         news_item: Dict[str, Any],
-        article_data: Dict[str, Any]
+        article_data: Dict[str, Any],
+        override_query: Optional[str] = None
     ) -> Dict[str, str]:
         """Provides the authentic, original news photo from the reporting source with proper credit.
-        - Priority 1: Real original image from the source news page / feed.
-        - Gives prominent credit: e.g. 'ছবি: প্রথম আলো' or 'ছবি: দ্য ডেইলি স্টার বাংলা'.
-        - Standardizes to crisp 16:9 HD editorial aspect ratio via GraphicsEditorAgent.
+        - Strictly guarantees ZERO duplicates: never returns an already used image.
+        - Supports override_query from Chief Editor feedback loop.
         """
         title = article_data.get("headline") or news_item.get("title", "")
         category = article_data.get("category", "জাতীয়")
-        search_keyword = article_data.get("image_search_keyword", "")
+        search_keyword = override_query or article_data.get("image_search_keyword", "")
         photo_caption = article_data.get("photo_caption") or f"{title}"
 
         # Clean source name for attribution
@@ -263,66 +297,70 @@ class ImageService:
 
         candidate_url = None
 
+        # 0. CHIEF EDITOR OVERRIDE QUERY: Direct Bing/Wikimedia search if editor requested specific query
+        if override_query:
+            candidate_url = self.search_bing_news_image(override_query)
+            if not candidate_url:
+                candidate_url = self.search_wikimedia_image(override_query) or self.search_commons_image(override_query)
+            if candidate_url:
+                photo_credit = "ছবি: সংগৃহীত / ফাইল ছবি"
+
         # 1. PRIORITY 1: Direct feed media / enclosure image from source
-        feed_img = news_item.get("feed_image")
-        if feed_img and is_valid_news_image(feed_img):
-            candidate_url = self.editor.clean_source_url(feed_img)
-            photo_credit = f"ছবি: {source_name}"
+        if not candidate_url:
+            feed_img = news_item.get("feed_image")
+            if feed_img and is_valid_news_image(feed_img) and not is_image_used(feed_img):
+                candidate_url = self.editor.clean_source_url(feed_img)
+                photo_credit = f"ছবি: {source_name}"
 
         # 2. PRIORITY 2: Scrape authentic og:image directly from source news article
         if not candidate_url and news_item.get("link"):
             scraped = self.scrape_article_og_image(news_item["link"])
-            if scraped and is_valid_news_image(scraped):
+            if scraped and is_valid_news_image(scraped) and not is_image_used(scraped):
                 candidate_url = scraped
                 photo_credit = f"ছবি: {source_name}"
 
-        # 3. PRIORITY 3: Search Wikimedia for specific person/entity (contextual backup)
+        # 3. PRIORITY 3: Search Bing Images for specific person/subject
         if not candidate_url:
-            queries = []
+            search_targets = []
             if search_keyword:
-                queries.append(search_keyword)
+                search_targets.append(search_keyword)
             clean_headline = title.split(":")[0].replace("হলো", "").replace("হবে", "").strip()
-            queries.append(clean_headline)
+            search_targets.append(clean_headline)
 
-            for q in queries:
-                wiki_img = self.search_wikimedia_image(q)
+            for target in search_targets:
+                bing_img = self.search_bing_news_image(target)
+                if bing_img:
+                    candidate_url = bing_img
+                    photo_credit = "ছবি: সংগৃহীত / ফাইল ছবি"
+                    break
+
+        # 4. PRIORITY 4: Search Wikimedia for specific person/entity
+        if not candidate_url:
+            for target in search_targets:
+                wiki_img = self.search_wikimedia_image(target) or self.search_commons_image(target)
                 if wiki_img:
                     candidate_url = wiki_img
-                    photo_credit = "ফাইল ছবি / সংগৃহীত"
-                    break
-                commons_img = self.search_commons_image(q)
-                if commons_img:
-                    candidate_url = commons_img
-                    photo_credit = "ফাইল ছবি: উইকিমিডিয়া"
+                    photo_credit = "ছবি: উইকিমিডিয়া"
                     break
 
-        # 4. PRIORITY 4: Curated editorial fallback pool
+        # 5. PRIORITY 5: Curated diverse pool (STRICTLY unused only!)
         if not candidate_url:
             pool = EDITORIAL_FALLBACK_POOLS.get(category, EDITORIAL_FALLBACK_POOLS["জাতীয়"])
             unused = [p for p in pool if not is_image_used(p)]
             if unused:
                 candidate_url = random.choice(unused)
-            else:
-                candidate_url = random.choice(pool)
-            photo_credit = "প্রতীকী ছবি: প্রভাতী খবর ২৪"
+                photo_credit = "প্রতীকী ছবি: প্রভাতী খবর ২৪"
 
-        # Pass through GraphicsEditorAgent:
-        # - Strips competitor overlay query parameters
-        # - Center-crops to 16:9 (1200x675)
-        # - Enhances clarity & sharpness
-        # - Uploads to high-speed permanent CDN
         final_image_url = self.editor.create_copyright_free_editorial_image(
             candidate_url=candidate_url,
             headline=title
-        )
+        ) if candidate_url else candidate_url
 
-        if not final_image_url:
-            final_image_url = candidate_url
-
-        mark_image_as_used(final_image_url)
+        if final_image_url:
+            mark_image_as_used(final_image_url)
 
         return {
-            "image_url": final_image_url,
+            "image_url": final_image_url or "",
             "caption": photo_caption,
             "credit": photo_credit
         }
