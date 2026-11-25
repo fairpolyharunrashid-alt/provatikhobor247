@@ -356,9 +356,6 @@ class ImageService:
             headline=title
         ) if candidate_url else candidate_url
 
-        if final_image_url:
-            mark_image_as_used(final_image_url)
-
         return {
             "image_url": final_image_url or "",
             "caption": photo_caption,

@@ -180,5 +180,4 @@ class GraphicsEditorAgent:
 
         # Clean competitor overlay from URL (e.g. query params, resizing flags)
         clean_url = self.clean_source_url(candidate_url)
-        mark_image_as_used(clean_url)
         return clean_url
