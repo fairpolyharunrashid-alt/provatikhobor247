@@ -70,6 +70,11 @@ EDITORIAL_FALLBACK_POOLS = {
         "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1200&h=675&q=85",
         "https://images.unsplash.com/photo-1447452001602-7090c7ab2db3?auto=format&fit=crop&w=1200&h=675&q=85"
     ],
+    "স্বাস্থ্য": [
+        "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=1200&h=675&q=85",
+        "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&h=675&q=85",
+        "https://images.unsplash.com/photo-1512290900672-1f417f7d30f3?auto=format&fit=crop&w=1200&h=675&q=85"
+    ],
     "মতামত": [
         "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&h=675&q=85"
     ]

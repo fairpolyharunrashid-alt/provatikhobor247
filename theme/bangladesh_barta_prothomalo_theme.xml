@@ -812,6 +812,7 @@
         <li><a expr:href='data:blog.homepageUrl + &quot;search/label/প্রযুক্তি?max-results=12&quot;'>বিজ্ঞান ও প্রযুক্তি</a></li>
         <li><a expr:href='data:blog.homepageUrl + &quot;search/label/বিনোদন?max-results=12&quot;'>বিনোদন</a></li>
         <li><a expr:href='data:blog.homepageUrl + &quot;search/label/জীবনযাপন?max-results=12&quot;'>জীবনযাপন</a></li>
+        <li><a expr:href='data:blog.homepageUrl + &quot;search/label/স্বাস্থ্য?max-results=12&quot;'>স্বাস্থ্য ও রূপচর্চা</a></li>
         <li><a expr:href='data:blog.homepageUrl + &quot;search/label/মতামত?max-results=12&quot;'>মতামত</a></li>
       </ul>
     </div>
@@ -1051,6 +1052,7 @@
             <li><a expr:href='data:blog.homepageUrl + &quot;search/label/অর্থনীতি&quot;'>অর্থনীতি ও বাণিজ্য</a></li>
             <li><a expr:href='data:blog.homepageUrl + &quot;search/label/আন্তর্জাতিক&quot;'>আন্তর্জাতিক খবর</a></li>
             <li><a expr:href='data:blog.homepageUrl + &quot;search/label/খেলাধুলা&quot;'>খেলাধুলা ও লাইভ স্কোর</a></li>
+            <li><a expr:href='data:blog.homepageUrl + &quot;search/label/স্বাস্থ্য&quot;'>স্বাস্থ্য ও রূপচর্চা</a></li>
           </ul>
         </div>
         <div>
