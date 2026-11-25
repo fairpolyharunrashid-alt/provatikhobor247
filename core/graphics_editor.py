@@ -76,15 +76,14 @@ class GraphicsEditorAgent:
 
         url = raw_url.strip()
 
-        # Prothom Alo: strip &overlay=... and rect parameters that force banner
-        if "prothomalo.com" in url:
-            # Remove the overlay query parameter entirely
+        # Strip &overlay=... parameters from any competitor CDN
+        if "overlay" in url:
             import urllib.parse as up
             parsed = up.urlparse(url)
             qs = up.parse_qs(parsed.query)
-            qs.pop("overlay", None)
-            qs.pop("overlay_position", None)
-            qs.pop("overlay_width_pct", None)
+            for k in list(qs.keys()):
+                if "overlay" in k.lower():
+                    qs.pop(k, None)
             new_query = up.urlencode(qs, doseq=True)
             url = up.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
 
@@ -175,29 +174,11 @@ class GraphicsEditorAgent:
         headline: str = "",
         allow_crop_watermark: bool = False
     ) -> Optional[str]:
-        """Full pipeline: cleans URL, downloads, removes watermarks, crops 16:9, uploads to CDN."""
+        """Cleans URL parameters and returns the authentic permanent CDN URL directly without third-party guest upload."""
         if not candidate_url:
             return None
 
-        # Clean competitor overlay from URL
+        # Clean competitor overlay from URL (e.g. query params, resizing flags)
         clean_url = self.clean_source_url(candidate_url)
-
-        # Download image
-        raw_img = self.download_image(clean_url)
-        if not raw_img:
-            return None
-
-        # Check if URL was from a competitor (strip watermark from bottom)
-        is_competitor = any(c in candidate_url.lower() for c in ["prothomalo", "bdnews", "jugantor", "dhakapost", "banglatribune", "somoy"])
-        processed_img = self.process_and_crop_16_9(raw_img, crop_watermark_bottom=(is_competitor and allow_crop_watermark))
-
-        # Upload to CDN
-        cdn_url = self.upload_to_cdn(processed_img)
-        if cdn_url:
-            mark_image_as_used(cdn_url)
-            mark_image_as_used(clean_url)
-            return cdn_url
-
-        # If CDN upload failed, return cleaned URL if it's not a local file
         mark_image_as_used(clean_url)
         return clean_url

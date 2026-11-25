@@ -85,6 +85,9 @@ BLACKLISTED_DOMAINS = [
     "googleusercontent.com",
     "gstatic.com",
     "news.google",
+    "freeimage.host",
+    "freeimage",
+    "iili.io",
     "logo",
     "icon",
     "favicon",
@@ -315,14 +318,6 @@ class ImageService:
 
         if not final_image_url:
             final_image_url = candidate_url
-
-        mark_image_as_used(final_image_url)
-
-        return {
-            "image_url": final_image_url,
-            "caption": photo_caption,
-            "credit": photo_credit
-        }
 
         mark_image_as_used(final_image_url)
 
