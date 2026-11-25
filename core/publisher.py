@@ -4,6 +4,7 @@ Guarantees 16:9 featured image appears first for proper thumbnail generation and
 """
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -59,7 +60,7 @@ class BloggerPublisher:
         kicker = article.get("kicker", "")
         category = article.get("category", "জাতীয়")
         highlights = article.get("key_highlights", [])
-        body_html = article.get("content_html", "")
+        body_html = re.sub(r'<h[2-6][^>]*>.*?</h[2-6]>', '', article.get("content_html", ""), flags=re.DOTALL | re.IGNORECASE).strip()
         img_url = image_info.get("image_url", "")
         img_caption = image_info.get("caption", headline)
         img_credit = image_info.get("credit", "ছবি: প্রভাতী খবর ২৪")

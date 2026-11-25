@@ -3,6 +3,7 @@ Article Writer: Transforms raw trending news into Prothom Alo-standard Bengali n
 Includes kickers, bold lead paragraphs, subheadings, key takeaways, and search queries for authentic images.
 """
 import logging
+import re
 from typing import Any, Dict, Optional
 
 from core.llm_pool import LLMPool
@@ -18,7 +19,7 @@ PROTHOM_ALO_SYSTEM_PROMPT = """
 ২. হেডলাইন অবশ্যই প্রদত্ত মূল শিরোনামের মূল বিষয়বস্তু ও ব্যক্তিবর্গ ঠিক রেখে প্রথম আলোর স্টাইলে পেশাদারভাবে তৈরি করতে হবে।
 ৩. ভাষা হবে প্রমিত বাংলা, ব্যাকরণগতভাবে নিখুঁত ও প্রাতিষ্ঠানিক।
 ৪. লিড প্যারাগ্রাফে সংবাদের মূল ৫W১H (কে, কী, কোথায়, কখন, কেন, কীভাবে) থাকবে।
-৫. রিপোর্টে উপযুক্ত সাব-হেডিং (<h2>, <h3>) ব্যবহার করবেন।
+৫. সংবাদের বডিতে কোনো সাব-হেডিং (<h2>, <h3>) ব্যবহার করবেন না। প্রথম আলোর স্টাইলের মতো সম্পূর্ণ খবরটি প্রাতিষ্ঠানিক ও সাবলীল প্যারাগ্রাফ (<p>) আকারে ধারাবাহিকভাবে প্রবাহিত হবে।
 ৬. পাঠকদের দ্রুত ধারণার জন্য সংবাদের শুরুতে একটি "এক নজরে মূল তথ্য" (Key Highlights) বুলেট পয়েন্ট থাকবে।
 ৭. সংবাদের জন্য উপযুক্ত ছবির সার্চ কি-ওয়ার্ড (image_search_keyword) প্রদান করবেন যাতে মূল শিরোনামের ব্যক্তি বা বিষয়ের আসল ছবি খুঁজে পাওয়া যায়।
 ৮. ছবির জন্য বস্তুনিষ্ঠ ক্যাপশন (photo_caption) ও ক্রেডিট (photo_credit) উল্লেখ করবেন।
@@ -57,7 +58,7 @@ class ArticleWriter:
         "মূল পয়েন্ট ২",
         "মূল পয়েন্ট ৩"
     ],
-    "content_html": "পুরো নিউজ রিপোর্টের বডি HTML ফরম্যাটে (প্যারাগ্রাফ <p>, সাব-হেড <h2> সহ অন্তত ৩৫০-৬০০ শব্দ)। প্রথম প্যারাগ্রাফে সংবাদের সম্পূর্ণ সারসংক্ষেপ থাকবে।"
+    "content_html": "পুরো নিউজ রিপোর্টের বডি শুধুমাত্র পরিচ্ছন্ন প্যারাগ্রাফ <p> ফরম্যাটে (কোনো <h2>/<h3> সাব-হেডিং ছাড়া, অন্তত ৩৫০-৬০০ শব্দ)। প্রথম প্যারাগ্রাফে সংবাদের সম্পূর্ণ সারসংক্ষেপ থাকবে এবং প্রতিটি প্যারাগ্রাফ স্বাভাবিকভাবে পরবর্তী প্রসঙ্গের সাথে যুক্ত থাকবে।"
 }}
 """
         result = self.llm.generate_json(
@@ -75,5 +76,9 @@ class ArticleWriter:
         if not credit.strip():
             credit = "ছবি: প্রভাতী খবর ২৪"
         result["photo_credit"] = credit
+
+        # Programmatically sanitize and strip any accidental subheadings (h2, h3, h4)
+        if "content_html" in result:
+            result["content_html"] = re.sub(r'<h[2-6][^>]*>.*?</h[2-6]>', '', result["content_html"], flags=re.DOTALL | re.IGNORECASE).strip()
 
         return result
